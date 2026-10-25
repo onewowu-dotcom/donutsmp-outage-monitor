@@ -1,0 +1,39 @@
+name: Discord delivery test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  send-test-dm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Send a test DM through the configured bot
+        env:
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          DISCORD_USER_ID: ${{ secrets.DISCORD_USER_ID }}
+        run: |
+          node --input-type=module <<'NODE'
+          const token = process.env.DISCORD_BOT_TOKEN;
+          const userId = process.env.DISCORD_USER_ID;
+          if (!token || !/^\d{15,22}$/.test(userId || '')) {
+            throw new Error('Missing or invalid DISCORD_BOT_TOKEN / DISCORD_USER_ID secret.');
+          }
+          const api = 'https://discord.com/api/v10';
+          const headers = { Authorization: `Bot ${token}`, 'Content-Type': 'application/json' };
+          const channelResponse = await fetch(`${api}/users/@me/channels`, {
+            method: 'POST', headers, body: JSON.stringify({ recipient_id: userId }),
+          });
+          const channel = await channelResponse.json();
+          if (!channelResponse.ok) throw new Error(`Could not open DM (${channelResponse.status}): ${channel.message || 'Discord API error'}`);
+          const messageResponse = await fetch(`${api}/channels/${channel.id}/messages`, {
+            method: 'POST', headers,
+            body: JSON.stringify({ content: '✅ DonutSMP monitor test: Discord delivery is working.' }),
+          });
+          const message = await messageResponse.json();
+          if (!messageResponse.ok) throw new Error(`Could not send test message (${messageResponse.status}): ${message.message || 'Discord API error'}`);
+          console.log('Test DM delivered successfully.');
+          NODE
